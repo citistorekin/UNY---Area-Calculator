@@ -135,7 +135,7 @@
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
 
     const PRESETS = [
-        { name: "Apita-G/F-Layout", url: "Drawing/Apita-GF-Layoutplan_250.jpg", paper: "A3", scale: 250 },
+        { name: "Apita-G/F-Layout", url: "Drawing/Apita-GF-Layoutplan_250_A3.jpg", paper: "A3", scale: 250 },
         { name: "Apita-B/F-Layout", url: "Drawing/Apita-BF-Layoutplan_400_A3.jpg", paper: "A3", scale: 400 },
         { name: "UNY-LokFu-Layout", url: "Drawing/UNY-LokFu-Layoutplan_500_A3.jpg", paper: "A3", scale: 500 },
         { name: "UNY-TKO-Layout", url: "Drawing/UNY-TKO-Layoutplan_300_A3.jpg", paper: "A3", scale: 300 },
@@ -154,10 +154,11 @@
     let isDragging = false, lastMouse = { x: 0, y: 0 }, isShiftPressed = false, finalValueText = ""; 
     
     // 狀態管理：區分滑鼠與觸控
-    let inputType = 'mouse'; // 'mouse' or 'touch'
+    let inputType = 'mouse'; 
     let lastTouchDist = 0;
     let lastTouchCenter = null;
     let touchStartPos = { x: 0, y: 0 };
+    let lastTouchTime = 0; // 新增：用於防止觸控後的滑鼠事件連點
 
     const PAPER_SIZES = { 'A0':841, 'A1':594, 'A2':420, 'A3':297, 'A4':210 };
 
@@ -250,7 +251,6 @@
 
     function screenToCanvas(sx, sy) { return { x: (sx - view.x) / view.zoom, y: (sy - view.y) / view.zoom }; }
 
-    // --- 核心修復：重寫 render 函數以確保線段不消失 ---
     function render(targetCtx, w, h, isExport = false) {
         targetCtx.clearRect(0, 0, w, h);
         if (!imgLoaded) return;
@@ -259,14 +259,13 @@
         targetCtx.drawImage(img, 0, 0);
 
         if (points.length > 0) {
-            // 1. 繪製已確定的主路徑 (紅實線) - 修復連線消失問題
+            // 繪製紅實線 (修復連線消失問題)
             targetCtx.beginPath();
             targetCtx.moveTo(points[0].x, points[0].y);
             for (let i = 1; i < points.length; i++) {
                 targetCtx.lineTo(points[i].x, points[i].y);
             }
             
-            // 如果是面積測量且已閉合，填色
             if (points.length > 2 && finalValueText.includes("sq.ft")) {
                 targetCtx.closePath(); 
                 targetCtx.fillStyle = 'rgba(220,53,69,0.3)'; 
@@ -277,7 +276,7 @@
             targetCtx.lineWidth = 2/view.zoom; 
             targetCtx.stroke();
 
-            // 2. 分段長度標示
+            // 分段長度標示
             if (currentTool === 'length' || (isExport && finalValueText.includes("cm"))) {
                 targetCtx.save();
                 targetCtx.font = `bold ${16/view.zoom}px Arial`;
@@ -298,7 +297,7 @@
                 targetCtx.restore();
             }
 
-            // 3. 紅色虛線預覽 (電腦版顯示，觸控版隱藏)
+            // 紅色虛線預覽 (僅電腦版滑鼠操作時顯示)
             if (!isExport && ['area', 'length', 'calibrate'].includes(currentTool) && points.length > 0 && inputType === 'mouse') {
                 let lp = points[points.length-1]; 
                 let tp = getConstrainedPos(lp, mousePos); 
@@ -312,13 +311,13 @@
                 targetCtx.restore();
             }
             
-            // 4. 頂點
+            // 頂點
             points.forEach(p => {
                 targetCtx.beginPath(); targetCtx.arc(p.x, p.y, 4/view.zoom, 0, Math.PI*2);
                 targetCtx.fillStyle = 'white'; targetCtx.fill(); targetCtx.stroke();
             });
 
-            // 5. 總結果標籤
+            // 總結果
             if (finalValueText !== "" && (isExport || currentTool === 'pan')) drawLabel(targetCtx, view.zoom);
         }
         targetCtx.restore();
@@ -344,7 +343,7 @@
         return { x: start.x + dist * Math.cos(snappedAngle), y: start.y + dist * Math.sin(snappedAngle) };
     }
 
-    // --- 觸控邏輯 ---
+    // --- 觸控邏輯 (包含修復連點的關鍵代碼) ---
     wrapper.addEventListener('touchstart', (e) => {
         inputType = 'touch'; 
         isTouching = true;
@@ -390,6 +389,9 @@
     }, { passive: false });
 
     wrapper.addEventListener('touchend', (e) => {
+        // 記錄觸控結束時間，用於阻擋後續的 mousedown
+        lastTouchTime = Date.now();
+        
         if (e.touches.length === 0) {
             if (isDragging && currentTool !== 'pan') {
                 const dist = Math.hypot(lastMouse.x - (touchStartPos.x - canvas.getBoundingClientRect().left), lastMouse.y - (touchStartPos.y - canvas.getBoundingClientRect().top));
@@ -399,7 +401,7 @@
         }
     });
 
-    // --- 滑鼠邏輯 ---
+    // --- 滑鼠邏輯 (加入連點防護) ---
     wrapper.addEventListener('mousemove', e => {
         inputType = 'mouse'; 
         const rect = canvas.getBoundingClientRect();
@@ -414,6 +416,9 @@
     });
 
     wrapper.addEventListener('mousedown', e => {
+        // 修復核心：如果距離上次觸控結束少於 500ms，忽略此滑鼠事件
+        if (Date.now() - lastTouchTime < 500) return;
+
         const rect = canvas.getBoundingClientRect();
         const ox = e.clientX - rect.left, oy = e.clientY - rect.top;
         if (currentTool === 'pan') { isDragging = true; lastMouse = { x: ox, y: oy }; } 
@@ -423,10 +428,15 @@
     function handleInputPoint(ox, oy) {
         let clickPos = screenToCanvas(ox, oy);
         if (points.length > 0) clickPos = getConstrainedPos(points[points.length-1], clickPos);
+        
+        // 修復面積提早閉合問題：嚴格限制必須大於等於 3 點才檢查閉合
         if (currentTool === 'area' && points.length >= 3) {
             const threshold = 17 / view.zoom; 
-            for (let p of points) {
-                if (Math.sqrt(Math.pow(clickPos.x - p.x, 2) + Math.pow(clickPos.y - p.y, 2)) < threshold) { closeMeasurement(); return; }
+            // 且只檢查與起點的距離 (避免點擊過快誤判)
+            let distStart = Math.sqrt(Math.pow(clickPos.x - points[0].x, 2) + Math.pow(clickPos.y - points[0].y, 2));
+            if (distStart < threshold) { 
+                closeMeasurement(); 
+                return; 
             }
         }
         points.push(clickPos);
@@ -504,17 +514,13 @@
     document.getElementById('btnZoomOut').onclick = () => { view.zoom /= 1.2; draw(); };
     document.getElementById('btnApplyScale').onclick = () => { applyScaleSettings(); draw(); };
     
-    // --- 核心修復 2: 儲存按鈕優先順序 (先 Try JPEG，失敗才 Catch PDF) ---
     document.getElementById('btnSave').onclick = () => {
         try {
             const off = document.createElement('canvas'); 
             off.width = canvas.width; 
             off.height = canvas.height;
-            // 傳遞 true 代表是導出模式
             render(off.getContext('2d'), off.width, off.height, true);
             
-            // 嘗試產生 JPEG 數據
-            // 如果 Canvas 被污染 (Tainted)，這裡會立即拋出 SecurityError，跳到 catch
             const url = off.toDataURL('image/jpeg', 0.9);
             
             const link = document.createElement('a'); 
@@ -522,7 +528,6 @@
             link.href = url; 
             link.click();
         } catch (e) {
-            // 只有上面的 Try 失敗時，才會執行這裡
             alert("⚠️ 系統提示：\n\n因瀏覽器安全性限制（例如直接開啟本地檔案），無法直接儲存圖片。\n\n將自動切換至「列印模式」，請選擇【另存為 PDF】。");
             window.print(); 
         }
