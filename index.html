@@ -2,11 +2,12 @@
 <html lang="zh-HK">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"> <title> UNY 平面圖面積/長度計算器 - OPS TEAM </title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"> 
+    <title> UNY 平面圖面積/長度計算器 - OPS TEAM </title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
     <style>
-        body { font-family: "Microsoft JhengHei", sans-serif; margin: 0; padding: 0; background: #f0f2f5; display: flex; height: 100vh; overflow: hidden; touch-action: none; /* 禁止瀏覽器預設觸控行為 */ }
+        body { font-family: "Microsoft JhengHei", sans-serif; margin: 0; padding: 0; background: #f0f2f5; display: flex; height: 100vh; overflow: hidden; touch-action: none; }
         
         /* 側邊欄 */
         #sidebar { width: 220px; background: #2c3e50; color: white; display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; border-right: 1px solid #1a252f; }
@@ -19,7 +20,7 @@
         .preset-num { opacity: 0.5; width: 20px; }
 
         /* 主內容區 */
-        #main-content { flex-grow: 1; display: flex; flex-direction: column; min-width: 0; height: 100vh; }
+        #main-content { flex-grow: 1; display: flex; flex-direction: column; min-width: 0; height: 100vh; position: relative; }
         .panel { background: white; z-index: 10; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
         
         /* 工具列佈局 */
@@ -49,9 +50,25 @@
         .result-text { color: #d9534f; font-size: 1.1em; }
         #loader { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); color: white; justify-content: center; align-items: center; z-index: 999; }
 
+        /* 署名樣式 */
+        #copyright-tag { position: fixed; bottom: 5px; left: 5px; font-size: 10px; color: rgba(255,255,255,0.7); z-index: 100; pointer-events: none; }
+
+        /* 行動端 UI 縮減 */
+        @media screen and (max-width: 1024px) {
+            #sidebar { width: 140px; }
+            .sidebar-header { font-size: 11px; padding: 6px; }
+            .preset-item { padding: 8px 6px; font-size: 0.7em; }
+            .row-yellow { padding: 4px 8px; gap: 4px; }
+            .row-tools { padding: 4px 8px; gap: 4px; }
+            .btn { padding: 3px 6px; font-size: 10px; }
+            label, select, input { font-size: 10px; }
+            #company-logo { max-height: 40px; }
+            .status-bar { padding: 4px 8px; font-size: 11px; }
+        }
+
         @media print {
             body { background: white; display: block; height: auto; overflow: visible; }
-            #sidebar, .panel, .status-bar, #loader { display: none !important; }
+            #sidebar, .panel, .status-bar, #loader, #copyright-tag { display: none !important; }
             #main-content { height: auto; width: 100%; display: block; }
             #canvas-wrapper { position: static; width: 100%; height: auto; background: white; overflow: visible; }
             canvas { width: 100%; height: auto; border: 1px solid #ddd; }
@@ -61,10 +78,11 @@
 <body>
 
 <div id="loader">處理中，請稍候...</div>
+<div id="copyright-tag">Copyright © 2026 Kin Tang</div>
 
 <div id="sidebar">
     <div id="logo-container">
-        <img id="company-logo" src="Drawing/apita-uny-logo.png" alt="Logo">
+        <img id="company-logo" src="Drawing/apita-uny-logo.jpg" alt="Logo">
     </div>
     <div class="sidebar-header">預設平面圖清單</div>
     <div id="presetList"></div>
@@ -108,7 +126,7 @@
     </div>
 
     <div class="status-bar">
-        <div id="guideText">提示：iPad 上單指繪圖/平移，雙指縮放。</div>
+        <div id="guideText">提示：電腦按 Shift 鎖定角度；iPad 單指繪圖，雙指縮放。</div>
         <div>結果: <span id="areaResult" class="result-text">0</span></div>
     </div>
 </div>
@@ -117,7 +135,7 @@
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
 
     const PRESETS = [
-        { name: "Apita-G/F-Layout", url: "Drawing/Apita-GF-Layoutplan_250_A3.jpg", paper: "A3", scale: 250 },
+        { name: "Apita-G/F-Layout", url: "Drawing/Apita-GF-Layoutplan_250.jpg", paper: "A3", scale: 250 },
         { name: "Apita-B/F-Layout", url: "Drawing/Apita-BF-Layoutplan_400_A3.jpg", paper: "A3", scale: 400 },
         { name: "UNY-LokFu-Layout", url: "Drawing/UNY-LokFu-Layoutplan_500_A3.jpg", paper: "A3", scale: 500 },
         { name: "UNY-TKO-Layout", url: "Drawing/UNY-TKO-Layoutplan_300_A3.jpg", paper: "A3", scale: 300 },
@@ -135,26 +153,22 @@
     let currentTool = 'pan', points = [], mousePos = { x: 0, y: 0 }; 
     let isDragging = false, lastMouse = { x: 0, y: 0 }, isShiftPressed = false, finalValueText = ""; 
     
-    // 觸控專用變數
+    // 狀態管理：區分滑鼠與觸控
+    let inputType = 'mouse'; // 'mouse' or 'touch'
     let lastTouchDist = 0;
     let lastTouchCenter = null;
     let touchStartPos = { x: 0, y: 0 };
 
     const PAPER_SIZES = { 'A0':841, 'A1':594, 'A2':420, 'A3':297, 'A4':210 };
 
-    // 側邊欄渲染
     const presetList = document.getElementById('presetList');
     for(let i=0; i<5; i++) {
         const item = PRESETS[i] || { name: `預設圖紙 ${String(i+1).padStart(2,'0')}`, url: "" };
         const div = document.createElement('div');
         div.className = 'preset-item';
         div.innerHTML = `<span class="preset-num">${String(i+1).padStart(2, '0')}</span> <span>${item.name}</span>`;
-        if (item.url) {
-            div.onclick = () => loadPreset(div, item);
-        } else {
-            div.style.opacity = "0.5";
-            div.style.cursor = "default";
-        }
+        if (item.url) { div.onclick = () => loadPreset(div, item); } 
+        else { div.style.opacity = "0.5"; div.style.cursor = "default"; }
         presetList.appendChild(div);
     }
 
@@ -171,22 +185,17 @@
         setScaleControlsLock(true);
         document.getElementById('paperSize').value = data.paper || 'A4';
         document.getElementById('scaleRatio').value = data.scale || 250;
-        
-        imgLoaded = false; 
-        loader.style.display = 'flex';
+        imgLoaded = false; loader.style.display = 'flex';
         img.removeAttribute('crossOrigin');
-
-        if (data.url.toLowerCase().endsWith('.pdf')) {
-            loadPdfFromUrl(data.url);
-        } else {
-            fetch(data.url)
-                .then(r => { if(!r.ok) throw new Error(r.status); return r.blob(); })
-                .then(b => { img.onload = () => { imgLoaded = true; loader.style.display='none'; finishImageLoad(); }; img.src = URL.createObjectURL(b); })
-                .catch(e => {
-                    img.onload = () => { imgLoaded = true; loader.style.display='none'; finishImageLoad(); };
-                    img.onerror = () => { loader.style.display='none'; alert("圖片載入失敗: "+data.url); };
-                    img.src = data.url;
-                });
+        if (data.url.toLowerCase().endsWith('.pdf')) { loadPdfFromUrl(data.url); } 
+        else {
+            fetch(data.url).then(r => r.blob()).then(b => { 
+                img.onload = () => { imgLoaded = true; loader.style.display='none'; finishImageLoad(); }; 
+                img.src = URL.createObjectURL(b); 
+            }).catch(e => {
+                img.onload = () => { imgLoaded = true; loader.style.display='none'; finishImageLoad(); };
+                img.src = data.url;
+            });
         }
     }
 
@@ -201,36 +210,27 @@
             await page.render({ canvasContext: offCanvas.getContext('2d'), viewport: viewport }).promise;
             img.onload = () => { imgLoaded = true; loader.style.display = 'none'; finishImageLoad(); };
             img.src = offCanvas.toDataURL('image/jpeg');
-        } catch (error) {
-            loader.style.display = 'none';
-            alert("PDF 載入失敗！\n注意：本地模式(file://)可能限制 PDF 讀取，請使用伺服器。");
-        }
+        } catch (error) { loader.style.display = 'none'; alert("PDF 載入失敗！"); }
     }
 
-    document.getElementById('fileInput').onchange = async (e) => {
+    document.getElementById('fileInput').onchange = (e) => {
         const file = e.target.files[0]; if (!file) return;
         setScaleControlsLock(false);
-        document.querySelectorAll('.preset-item').forEach(el => el.classList.remove('active'));
         loader.style.display = 'flex'; imgLoaded = false;
-        img.removeAttribute('crossOrigin');
-
+        const reader = new FileReader();
         if (file.type === 'application/pdf') {
-            const reader = new FileReader();
             reader.onload = async function() {
-                try {
-                    const pdf = await pdfjsLib.getDocument(new Uint8Array(this.result)).promise;
-                    const page = await pdf.getPage(1);
-                    const viewport = page.getViewport({ scale: 2.0 });
-                    const offCanvas = document.createElement('canvas');
-                    offCanvas.height = viewport.height; offCanvas.width = viewport.width;
-                    await page.render({ canvasContext: offCanvas.getContext('2d'), viewport: viewport }).promise;
-                    img.onload = () => { imgLoaded = true; loader.style.display = 'none'; finishImageLoad(); };
-                    img.src = offCanvas.toDataURL('image/jpeg');
-                } catch (err) { loader.style.display = 'none'; alert("PDF 錯誤: " + err.message); }
+                const pdf = await pdfjsLib.getDocument(new Uint8Array(this.result)).promise;
+                const page = await pdf.getPage(1);
+                const viewport = page.getViewport({ scale: 2.0 });
+                const offCanvas = document.createElement('canvas');
+                offCanvas.height = viewport.height; offCanvas.width = viewport.width;
+                await page.render({ canvasContext: offCanvas.getContext('2d'), viewport: viewport }).promise;
+                img.onload = () => { imgLoaded = true; loader.style.display = 'none'; finishImageLoad(); };
+                img.src = offCanvas.toDataURL('image/jpeg');
             };
             reader.readAsArrayBuffer(file);
         } else {
-            const reader = new FileReader();
             reader.onload = (event) => {
                 img.onload = () => { imgLoaded = true; loader.style.display = 'none'; finishImageLoad(); };
                 img.src = event.target.result;
@@ -250,28 +250,75 @@
 
     function screenToCanvas(sx, sy) { return { x: (sx - view.x) / view.zoom, y: (sy - view.y) / view.zoom }; }
 
+    // --- 核心修復：重寫 render 函數以確保線段不消失 ---
     function render(targetCtx, w, h, isExport = false) {
         targetCtx.clearRect(0, 0, w, h);
         if (!imgLoaded) return;
         targetCtx.save();
         targetCtx.translate(view.x, view.y); targetCtx.scale(view.zoom, view.zoom);
         targetCtx.drawImage(img, 0, 0);
+
         if (points.length > 0) {
-            targetCtx.beginPath(); targetCtx.moveTo(points[0].x, points[0].y);
-            points.forEach(p => targetCtx.lineTo(p.x, p.y));
-            if (!isExport && ['area', 'length', 'calibrate'].includes(currentTool)) {
-                let lp = points[points.length-1]; let tp = getConstrainedPos(lp, mousePos);
-                targetCtx.setLineDash([5/view.zoom, 5/view.zoom]);
-                targetCtx.strokeStyle = currentTool === 'calibrate' ? '#ffc107' : 'red';
-                targetCtx.lineTo(tp.x, tp.y); targetCtx.stroke(); targetCtx.setLineDash([]);
-            } else if (points.length > 2 && finalValueText.includes("sq.ft")) {
-                targetCtx.closePath(); targetCtx.fillStyle = 'rgba(220,53,69,0.3)'; targetCtx.fill();
+            // 1. 繪製已確定的主路徑 (紅實線) - 修復連線消失問題
+            targetCtx.beginPath();
+            targetCtx.moveTo(points[0].x, points[0].y);
+            for (let i = 1; i < points.length; i++) {
+                targetCtx.lineTo(points[i].x, points[i].y);
             }
-            targetCtx.strokeStyle = '#dc3545'; targetCtx.lineWidth = 2/view.zoom; targetCtx.stroke();
+            
+            // 如果是面積測量且已閉合，填色
+            if (points.length > 2 && finalValueText.includes("sq.ft")) {
+                targetCtx.closePath(); 
+                targetCtx.fillStyle = 'rgba(220,53,69,0.3)'; 
+                targetCtx.fill();
+            }
+            
+            targetCtx.strokeStyle = '#dc3545'; 
+            targetCtx.lineWidth = 2/view.zoom; 
+            targetCtx.stroke();
+
+            // 2. 分段長度標示
+            if (currentTool === 'length' || (isExport && finalValueText.includes("cm"))) {
+                targetCtx.save();
+                targetCtx.font = `bold ${16/view.zoom}px Arial`;
+                targetCtx.textAlign = "center";
+                targetCtx.fillStyle = "blue";
+                for (let i = 0; i < points.length - 1; i++) {
+                    let p1 = points[i], p2 = points[i+1];
+                    let dist = Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
+                    let label = ((dist / ppm) * 100).toFixed(1) + "cm";
+                    let mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
+                    let angle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+                    let offsetX = Math.cos(angle - Math.PI/2) * (15/view.zoom);
+                    let offsetY = Math.sin(angle - Math.PI/2) * (15/view.zoom);
+                    targetCtx.strokeStyle = "white"; targetCtx.lineWidth = 4/view.zoom;
+                    targetCtx.strokeText(label, mx + offsetX, my + offsetY);
+                    targetCtx.fillText(label, mx + offsetX, my + offsetY);
+                }
+                targetCtx.restore();
+            }
+
+            // 3. 紅色虛線預覽 (電腦版顯示，觸控版隱藏)
+            if (!isExport && ['area', 'length', 'calibrate'].includes(currentTool) && points.length > 0 && inputType === 'mouse') {
+                let lp = points[points.length-1]; 
+                let tp = getConstrainedPos(lp, mousePos); 
+                targetCtx.save();
+                targetCtx.setLineDash([5/view.zoom, 5/view.zoom]);
+                targetCtx.strokeStyle = 'red';
+                targetCtx.beginPath();
+                targetCtx.moveTo(lp.x, lp.y);
+                targetCtx.lineTo(tp.x, tp.y);
+                targetCtx.stroke();
+                targetCtx.restore();
+            }
+            
+            // 4. 頂點
             points.forEach(p => {
                 targetCtx.beginPath(); targetCtx.arc(p.x, p.y, 4/view.zoom, 0, Math.PI*2);
                 targetCtx.fillStyle = 'white'; targetCtx.fill(); targetCtx.stroke();
             });
+
+            // 5. 總結果標籤
             if (finalValueText !== "" && (isExport || currentTool === 'pan')) drawLabel(targetCtx, view.zoom);
         }
         targetCtx.restore();
@@ -297,17 +344,17 @@
         return { x: start.x + dist * Math.cos(snappedAngle), y: start.y + dist * Math.sin(snappedAngle) };
     }
 
-    // --- 增加觸控事件監聽 (Touch Support) ---
+    // --- 觸控邏輯 ---
     wrapper.addEventListener('touchstart', (e) => {
+        inputType = 'touch'; 
+        isTouching = true;
+        const rect = canvas.getBoundingClientRect();
         if (e.touches.length === 1) {
-            // 單指觸控：記錄位置以檢測是否為點擊 (Tap)
-            const rect = canvas.getBoundingClientRect();
             const t = e.touches[0];
             lastMouse = { x: t.clientX - rect.left, y: t.clientY - rect.top };
             touchStartPos = { x: t.clientX, y: t.clientY };
             isDragging = true;
         } else if (e.touches.length === 2) {
-            // 雙指觸控：準備縮放與平移
             isDragging = false;
             const p1 = e.touches[0], p2 = e.touches[1];
             lastTouchDist = Math.hypot(p2.clientX - p1.clientX, p2.clientY - p1.clientY);
@@ -316,84 +363,70 @@
     }, { passive: false });
 
     wrapper.addEventListener('touchmove', (e) => {
-        e.preventDefault(); // 防止滾動頁面
+        e.preventDefault();
         const rect = canvas.getBoundingClientRect();
-
-        if (e.touches.length === 1 && isDragging && currentTool === 'pan') {
-             // 單指平移
+        if (e.touches.length === 1 && isDragging) {
              const t = e.touches[0];
-             const mx = t.clientX - rect.left;
-             const my = t.clientY - rect.top;
-             view.x += mx - lastMouse.x;
-             view.y += my - lastMouse.y;
+             const mx = t.clientX - rect.left, my = t.clientY - rect.top;
+             mousePos = screenToCanvas(mx, my);
+             if (currentTool === 'pan') { view.x += mx - lastMouse.x; view.y += my - lastMouse.y; }
              lastMouse = { x: mx, y: my };
              draw();
         } else if (e.touches.length === 2) {
-             // 雙指操作 (縮放 + 平移)
              const p1 = e.touches[0], p2 = e.touches[1];
              const dist = Math.hypot(p2.clientX - p1.clientX, p2.clientY - p1.clientY);
              const center = { x: (p1.clientX + p2.clientX) / 2, y: (p1.clientY + p2.clientY) / 2 };
-
              if (lastTouchDist > 0) {
                  const scale = dist / lastTouchDist;
-                 const cx = center.x - rect.left;
-                 const cy = center.y - rect.top;
+                 const cx = center.x - rect.left, cy = center.y - rect.top;
                  const mouseBefore = screenToCanvas(cx, cy);
                  view.zoom *= scale;
-                 view.x = cx - mouseBefore.x * view.zoom;
-                 view.y = cy - mouseBefore.y * view.zoom;
+                 view.x = cx - mouseBefore.x * view.zoom; view.y = cy - mouseBefore.y * view.zoom;
              }
-             if (lastTouchCenter) {
-                 view.x += center.x - lastTouchCenter.x;
-                 view.y += center.y - lastTouchCenter.y;
-             }
-             lastTouchDist = dist;
-             lastTouchCenter = center;
+             if (lastTouchCenter) { view.x += center.x - lastTouchCenter.x; view.y += center.y - lastTouchCenter.y; }
+             lastTouchDist = dist; lastTouchCenter = center;
              draw();
         }
     }, { passive: false });
 
     wrapper.addEventListener('touchend', (e) => {
-        e.preventDefault(); // 防止觸發滑鼠事件
-        // 檢測是否為「輕點 (Tap)」
-        if (e.changedTouches.length === 1 && e.touches.length === 0 && currentTool !== 'pan') {
-            const t = e.changedTouches[0];
-            const dist = Math.hypot(t.clientX - touchStartPos.x, t.clientY - touchStartPos.y);
-            
-            // 如果手指移動距離小於 10px，視為點擊，執行加點邏輯
-            if (dist < 10) {
-                const rect = canvas.getBoundingClientRect();
-                handleInputPoint(t.clientX - rect.left, t.clientY - rect.top);
+        if (e.touches.length === 0) {
+            if (isDragging && currentTool !== 'pan') {
+                const dist = Math.hypot(lastMouse.x - (touchStartPos.x - canvas.getBoundingClientRect().left), lastMouse.y - (touchStartPos.y - canvas.getBoundingClientRect().top));
+                if (dist < 10) handleInputPoint(lastMouse.x, lastMouse.y);
             }
+            isDragging = false; isTouching = false; draw();
         }
-        isDragging = false;
-        lastTouchDist = 0;
-        lastTouchCenter = null;
     });
 
-    // --- 滑鼠事件 ---
+    // --- 滑鼠邏輯 ---
+    wrapper.addEventListener('mousemove', e => {
+        inputType = 'mouse'; 
+        const rect = canvas.getBoundingClientRect();
+        const ox = e.clientX - rect.left, oy = e.clientY - rect.top;
+        mousePos = screenToCanvas(ox, oy); 
+        
+        if (isDragging && currentTool === 'pan') {
+            view.x += ox - lastMouse.x; view.y += oy - lastMouse.y;
+            lastMouse = { x: ox, y: oy };
+        }
+        draw(); 
+    });
+
     wrapper.addEventListener('mousedown', e => {
         const rect = canvas.getBoundingClientRect();
         const ox = e.clientX - rect.left, oy = e.clientY - rect.top;
         if (currentTool === 'pan') { isDragging = true; lastMouse = { x: ox, y: oy }; } 
-        else {
-            if (e.button === 2) { closeMeasurement(); return; }
-            handleInputPoint(ox, oy);
-        }
+        else { handleInputPoint(ox, oy); }
     });
 
-    // 統一處理加點邏輯 (滑鼠點擊 與 觸控Tap 共用)
     function handleInputPoint(ox, oy) {
         let clickPos = screenToCanvas(ox, oy);
         if (points.length > 0) clickPos = getConstrainedPos(points[points.length-1], clickPos);
-        
-        // 智能封閉邏輯
         if (currentTool === 'area' && points.length >= 3) {
             const threshold = 17 / view.zoom; 
             for (let p of points) {
-                if (Math.sqrt(Math.pow(clickPos.x - p.x, 2) + Math.pow(clickPos.y - p.y, 2)) < threshold) { 
-                    closeMeasurement(); return; 
-                }
+                if (Math.sqrt(Math.pow(clickPos.x - p.x, 2) + Math.pow(clickPos.y - p.y, 2)) < threshold) { closeMeasurement(); return; }
             }
         }
         points.push(clickPos);
@@ -405,29 +438,17 @@
         let p1 = points[0], p2 = points[1];
         let pxDist = Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
         let realCM = prompt("請輸入實際長度 (cm):", "100");
-        if (realCM && !isNaN(realCM)) { ppm = pxDist / (parseFloat(realCM) / 100); alert("比例校對完成！"); }
+        if (realCM && !isNaN(realCM)) { ppm = pxDist / (parseFloat(realCM) / 100); alert("校對完成！"); }
         points = []; switchTool('pan');
     }
 
-    wrapper.addEventListener('mousemove', e => {
-        const rect = canvas.getBoundingClientRect();
-        const ox = e.clientX - rect.left, oy = e.clientY - rect.top;
-        mousePos = screenToCanvas(ox, oy);
-        if (isDragging && currentTool === 'pan') {
-            view.x += ox - lastMouse.x; view.y += oy - lastMouse.y;
-            lastMouse = { x: ox, y: oy };
-        }
-        draw();
-    });
-
-    window.addEventListener('mouseup', () => isDragging = false);
+    window.addEventListener('mouseup', () => { isDragging = false; draw(); });
     wrapper.addEventListener('wheel', e => {
         e.preventDefault();
         const rect = canvas.getBoundingClientRect();
-        const ox = e.clientX - rect.left, oy = e.clientY - rect.top;
-        const mouseBefore = screenToCanvas(ox, oy);
+        const mouseBefore = screenToCanvas(e.clientX-rect.left, e.clientY-rect.top);
         view.zoom *= (e.deltaY > 0 ? 0.9 : 1.1);
-        view.x = ox - mouseBefore.x * view.zoom; view.y = oy - mouseBefore.y * view.zoom;
+        view.x = (e.clientX-rect.left) - mouseBefore.x * view.zoom; view.y = (e.clientY-rect.top) - mouseBefore.y * view.zoom;
         draw();
     }, { passive: false });
 
@@ -464,12 +485,14 @@
     function undoLastPoint() { if (points.length > 0) { points.pop(); finalValueText = ""; draw(); } }
 
     window.addEventListener('keydown', e => {
-        if (e.key === 'Shift') isShiftPressed = true;
+        if (e.key === 'Shift') { isShiftPressed = true; draw(); }
         if (e.key === ' ') { e.preventDefault(); switchTool('pan'); }
         if (e.key === 'Enter') closeMeasurement();
         if (e.key === 'Backspace' || (e.ctrlKey && e.key === 'z')) { e.preventDefault(); undoLastPoint(); }
     });
-    window.addEventListener('keyup', e => { if (e.key === 'Shift') isShiftPressed = false; });
+    window.addEventListener('keyup', e => { 
+        if (e.key === 'Shift') { isShiftPressed = false; draw(); }
+    });
 
     document.getElementById('btnPan').onclick = () => switchTool('pan');
     document.getElementById('btnMeasureArea').onclick = () => switchTool('area');
@@ -481,18 +504,27 @@
     document.getElementById('btnZoomOut').onclick = () => { view.zoom /= 1.2; draw(); };
     document.getElementById('btnApplyScale').onclick = () => { applyScaleSettings(); draw(); };
     
+    // --- 核心修復 2: 儲存按鈕優先順序 (先 Try JPEG，失敗才 Catch PDF) ---
     document.getElementById('btnSave').onclick = () => {
         try {
-            const off = document.createElement('canvas'); off.width = canvas.width; off.height = canvas.height;
+            const off = document.createElement('canvas'); 
+            off.width = canvas.width; 
+            off.height = canvas.height;
+            // 傳遞 true 代表是導出模式
             render(off.getContext('2d'), off.width, off.height, true);
+            
+            // 嘗試產生 JPEG 數據
+            // 如果 Canvas 被污染 (Tainted)，這裡會立即拋出 SecurityError，跳到 catch
             const url = off.toDataURL('image/jpeg', 0.9);
+            
             const link = document.createElement('a'); 
             link.download = 'Measure_Result.jpg'; 
             link.href = url; 
             link.click();
         } catch (e) {
-            alert("⚠️ 瀏覽器安全性提示：\n\n系統將切換至「列印模式」，請在接下來的視窗中選擇【另存為 PDF】。");
-            window.print();
+            // 只有上面的 Try 失敗時，才會執行這裡
+            alert("⚠️ 系統提示：\n\n因瀏覽器安全性限制（例如直接開啟本地檔案），無法直接儲存圖片。\n\n將自動切換至「列印模式」，請選擇【另存為 PDF】。");
+            window.print(); 
         }
     };
 
