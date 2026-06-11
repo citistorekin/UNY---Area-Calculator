@@ -163,17 +163,9 @@
 
     const PAPER_SIZES = { 'A0':841, 'A1':594, 'A2':420, 'A3':297, 'A4':210 };
 
-const presetList = document.getElementById('presetList');
-// 改成 PRESETS.length，讓系統自動根據上面有多少張圖，就產生多少個按鈕
-for(let i=0; i < PRESETS.length; i++) {   
-    const item = PRESETS[i] || { name: `預設圖紙 ${String(i+1).padStart(2,'0')}`, url: "" };
-    const div = document.createElement('div');
-    div.className = 'preset-item';
-    div.innerHTML = `<span class="preset-num">${String(i+1).padStart(2, '0')}</span> <span>${item.name}</span>`;
-    if (item.url) { div.onclick = () => loadPreset(div, item); } 
-    else { div.style.opacity = "0.5"; div.style.cursor = "default"; }
-    presetList.appendChild(div);
-}
+    const presetList = document.getElementById('presetList'); // 改成 PRESETS.length，讓系統自動根據上面有多少張圖，就產生多少個按鈕
+    for(let i=0; i<6; i++) {
+        const item = PRESETS[i] || { name: `預設圖紙 ${String(i+1).padStart(2,'0')}`, url: "" };
         const div = document.createElement('div');
         div.className = 'preset-item';
         div.innerHTML = `<span class="preset-num">${String(i+1).padStart(2, '0')}</span> <span>${item.name}</span>`;
